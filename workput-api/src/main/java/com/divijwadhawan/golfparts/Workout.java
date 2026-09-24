@@ -1,4 +1,4 @@
-package com.example.workout_api; // Replace with your actual package
+package com.divijwadhawan.golfparts; // Replace with your actual package
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

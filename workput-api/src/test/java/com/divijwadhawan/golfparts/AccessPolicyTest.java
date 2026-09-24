@@ -1,4 +1,4 @@
-package com.example.workout_api;
+package com.divijwadhawan.golfparts;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

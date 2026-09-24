@@ -1,4 +1,4 @@
-package com.example.workout_api; // Use your actual package
+package com.divijwadhawan.golfparts; // Use your actual package
 
 public record CreateCarPartRequest(
         String vehicle,

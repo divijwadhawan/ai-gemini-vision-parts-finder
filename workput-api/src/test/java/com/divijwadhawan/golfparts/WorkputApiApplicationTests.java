@@ -1,4 +1,4 @@
-package com.example.workput_api;
+package com.divijwadhawan.golfparts;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
