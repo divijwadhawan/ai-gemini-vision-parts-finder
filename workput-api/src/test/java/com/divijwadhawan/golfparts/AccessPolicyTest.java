@@ -13,6 +13,10 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
+import com.divijwadhawan.golfparts.auth.AccessPolicy;
+import com.divijwadhawan.golfparts.auth.AccessRequest;
+import com.divijwadhawan.golfparts.auth.AccessRequestRepository;
+
 class AccessPolicyTest {
     private final AccessRequestRepository requests = mock(AccessRequestRepository.class);
     private final AccessPolicy policy = new AccessPolicy(requests, "owner-sub");

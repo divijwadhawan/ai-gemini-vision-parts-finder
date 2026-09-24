@@ -1,4 +1,4 @@
-package com.divijwadhawan.golfparts;
+package com.divijwadhawan.golfparts.auth;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;

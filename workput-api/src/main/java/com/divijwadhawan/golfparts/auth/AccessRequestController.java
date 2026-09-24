@@ -1,4 +1,4 @@
-package com.divijwadhawan.golfparts;
+package com.divijwadhawan.golfparts.auth;
 
 import java.util.List;
 
