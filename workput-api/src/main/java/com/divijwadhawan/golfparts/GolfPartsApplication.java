@@ -1,13 +1,13 @@
-package com.example.workout_api;
+package com.divijwadhawan.golfparts;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class WorkputApiApplication {
+public class GolfPartsApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(WorkputApiApplication.class, args);
+		SpringApplication.run(GolfPartsApplication.class, args);
 	}
 
 }
