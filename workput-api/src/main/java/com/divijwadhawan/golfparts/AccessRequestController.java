@@ -1,4 +1,4 @@
-package com.example.workout_api;
+package com.divijwadhawan.golfparts;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package com.example.workout_api;
+package com.divijwadhawan.golfparts;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
