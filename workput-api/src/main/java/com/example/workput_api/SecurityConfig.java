@@ -1,6 +1,5 @@
 package com.example.workout_api;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,22 +13,26 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(
-            HttpSecurity http,
-            @Value("${APP_ADMIN_SUB:unconfigured}") String adminSub
-    ) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, AccessPolicy policy)
+            throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/vehicles/**").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/me", "/access-requests/me")
+                            .authenticated()
+                        .requestMatchers(HttpMethod.POST, "/access-requests")
+                            .authenticated()
+                        .requestMatchers("/admin/access-requests", "/admin/access-requests/**")
+                            .access((authentication, context) ->
+                                new AuthorizationDecision(policy.isAdmin(authentication.get())))
+                        .requestMatchers(HttpMethod.GET, "/vehicles/**")
+                            .access((authentication, context) ->
+                                new AuthorizationDecision(policy.canReadParts(authentication.get())))
                         .requestMatchers(HttpMethod.POST, "/parts")
                             .access((authentication, context) ->
-                                new AuthorizationDecision(
-                                    adminSub.equals(authentication.get().getName())
-                                ))
+                                new AuthorizationDecision(policy.isAdmin(authentication.get())))
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
                 .build();
