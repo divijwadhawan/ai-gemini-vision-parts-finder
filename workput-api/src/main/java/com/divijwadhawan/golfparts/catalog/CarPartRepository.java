@@ -6,4 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CarPartRepository extends JpaRepository<CarPart, Long> {
 
     List<CarPart> findByAssembly(Assembly assembly);
+
+    boolean existsByAssemblyAndReferenceNumber(
+            Assembly assembly,
+            String referenceNumber
+    );
 }

@@ -17,6 +17,13 @@ public class AccessPolicy {
     }
 
     public boolean isAdmin(Authentication authentication) {
+
+        if (authentication instanceof JwtAuthenticationToken jwt) {
+           System.out.println(
+                "ADMIN CHECK: tokenSub=[" + jwt.getToken().getSubject()
+                + "] adminSub=[" + adminSub + "]"
+            );
+        }
         return authentication instanceof JwtAuthenticationToken jwt
                 && !adminSub.isBlank()
                 && adminSub.equals(jwt.getToken().getSubject());

@@ -20,7 +20,7 @@ public class CatalogService {
         this.assemblyRepository = assemblyRepository;
     }
 
-    public List<CarPart> getPartsByAssemblyCode(String code) {
+    public List<CarPartResponse> getPartsByAssemblyCode(String code) {
 
         Assembly assembly = assemblyRepository
                 .findByCode(code)
@@ -29,10 +29,13 @@ public class CatalogService {
                         "Assembly not found"
                 ));
 
-        return partRepository.findByAssembly(assembly);
+        return partRepository.findByAssembly(assembly)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public CarPart createPart(CreateCarPartRequest request) {
+    public CarPartResponse createPart(CreateCarPartRequest request) {
 
         Assembly assembly = assemblyRepository
                 .findByCode(request.assemblyCode())
@@ -52,6 +55,39 @@ public class CatalogService {
                 request.imageIdentifier()
         );
 
-        return partRepository.save(part);
+        CarPart savedPart = partRepository.save(part);
+
+        return toResponse(savedPart);
+    }
+
+    private CarPartResponse toResponse(CarPart part) {
+        return new CarPartResponse(
+                part.getId(),
+                part.getAssembly().getCode(),
+                part.getName(),
+                part.getDescription(),
+                part.getReferenceNumber(),
+                part.getCalloutNumber(),
+                part.getQuantity(),
+                part.getPrice(),
+                part.getImageIdentifier()
+        );
+    }
+
+    public List<AssemblyResponse> getAssemblies() {
+
+       return assemblyRepository.findAll()
+            .stream()
+            .map(this::toAssemblyResponse)
+            .toList();
+    }
+
+    private AssemblyResponse toAssemblyResponse(Assembly assembly) {
+       return new AssemblyResponse(
+            assembly.getCode(),
+            assembly.getName(),
+            assembly.getDescription(),
+            assembly.getDiagramImage()
+        );
     }
 }

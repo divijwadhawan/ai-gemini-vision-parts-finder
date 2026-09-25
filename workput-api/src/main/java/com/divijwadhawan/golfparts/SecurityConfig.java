@@ -69,6 +69,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/me")
                         .authenticated()
 
+                       // Allow Spring to return application errors
+                        .requestMatchers("/error")
+                        .permitAll()
+
                         // Everything else is blocked
                         .anyRequest()
                         .denyAll()

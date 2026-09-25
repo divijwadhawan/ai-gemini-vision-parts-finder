@@ -2,6 +2,8 @@ package com.divijwadhawan.golfparts.catalog;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,13 +22,20 @@ public class CarPartController {
     }
 
     @GetMapping("/assemblies/{code}/parts")
-    public List<CarPart> getPartsByAssembly(@PathVariable String code) {
+    public List<CarPartResponse> getPartsByAssembly(@PathVariable String code) {
         return catalogService.getPartsByAssemblyCode(code);
+    }
+
+    @GetMapping("/assemblies")
+    public List<AssemblyResponse> getAssemblies() {
+        return catalogService.getAssemblies();
     }
 
     @PostMapping("/parts")
     @ResponseStatus(HttpStatus.CREATED)
-    public CarPart createPart(@RequestBody CreateCarPartRequest request) {
+    public CarPartResponse createPart(
+            @Valid @RequestBody CreateCarPartRequest request) {
+
         return catalogService.createPart(request);
     }
 }
