@@ -64,6 +64,17 @@ public class SecurityConfig {
                                 new AuthorizationDecision(
                                         accessPolicy.isAdmin(authentication.get())
                                 ))        
+                        
+                        .requestMatchers(HttpMethod.POST, "/scan")
+                        .access((authentication, context) ->
+                                new AuthorizationDecision(
+                                        accessPolicy.canReadParts(authentication.get())
+                                ))
+                        .requestMatchers(HttpMethod.GET, "/scans/me")
+                        .access((authentication, context) ->
+                                new AuthorizationDecision(
+                                        accessPolicy.canReadParts(authentication.get())
+                                ))                
 
                         // Existing /me endpoint
                         .requestMatchers(HttpMethod.GET, "/me")
@@ -74,7 +85,7 @@ public class SecurityConfig {
                         .permitAll()
 
                         // Everything else is blocked
-                        .anyRequest()
+                        .anyRequest()   
                         .denyAll()
                 )
 
