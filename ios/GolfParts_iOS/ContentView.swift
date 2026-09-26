@@ -23,47 +23,105 @@ struct ContentView: View {
     @State private var idToken: String?
     @State private var isSignedIn = false
 
+    @State private var currentGoogleSub: String?
+
+    private let adminGoogleSub =
+        "106707840647310647835"
+
+    private var isAdmin: Bool {
+        currentGoogleSub == adminGoogleSub
+    }
+
+
+    // ============================================================
+    // MARK: - Application Access
+    // ============================================================
+
+    enum AppAccessState {
+
+        case checking
+        case notRequested
+        case pending
+        case approved
+        case rejected
+    }
+
+
+    @State private var accessState:
+        AppAccessState = .checking
+
+    @State private var accessError: String?
+
+    @State private var isRequestingAccess =
+        false
+
+    private let accessAPIService =
+        AccessAPIService()
+
+
+    // ============================================================
+    // MARK: - Admin
+    // ============================================================
+
+    @State private var showingAdmin =
+        false
+
 
     // ============================================================
     // MARK: - Image Selection
     // ============================================================
 
-    @State private var showCamera = false
-    @State private var showPhotoPicker = false
-    @State private var showImageSourceOptions = false
+    @State private var showCamera =
+        false
 
-    @State private var selectedImage: UIImage?
+    @State private var showPhotoPicker =
+        false
 
-    @State private var showingImageCrop = false
+    @State private var showImageSourceOptions =
+        false
+
+    @State private var selectedImage:
+        UIImage?
+
+    @State private var showingImageCrop =
+        false
 
 
     // ============================================================
     // MARK: - AI Scan
     // ============================================================
 
-    @State private var scanResult: ScanResult?
+    @State private var scanResult:
+        ScanResult?
 
-    @State private var isScanning = false
+    @State private var isScanning =
+        false
 
-    // Friendly error shown when AI analysis fails.
-    @State private var scanError: String?
+    @State private var scanError:
+        String?
 
-    private let scanAPIService = ScanAPIService()
+    private let scanAPIService =
+        ScanAPIService()
 
 
     // ============================================================
     // MARK: - Assembly Parts
     // ============================================================
 
-    @State private var parts: [CarPart] = []
+    @State private var parts:
+        [CarPart] = []
 
-    @State private var isLoadingParts = false
+    @State private var isLoadingParts =
+        false
 
-    @State private var partsError: String?
+    @State private var partsError:
+        String?
 
-    @State private var showingAssemblyDiagram = false
+    @State private var showingAssemblyDiagram =
+        false
 
-    private let partsAPIService = PartsAPIService()
+    private let partsAPIService =
+        PartsAPIService()
 
 
     // ============================================================
@@ -105,7 +163,9 @@ struct ContentView: View {
 
                     Text(backendStatus)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(
+                            .secondary
+                        )
                 }
 
 
@@ -127,8 +187,12 @@ struct ContentView: View {
 
                     Text(status)
                         .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .textSelection(.enabled)
+                        .multilineTextAlignment(
+                            .center
+                        )
+                        .textSelection(
+                            .enabled
+                        )
 
 
                 // =================================================
@@ -137,318 +201,28 @@ struct ContentView: View {
 
                 } else {
 
-                    Text("Signed in ✓")
-                        .font(.headline)
-
-
-                    // ------------------------------------------------
-                    // Selected image
-                    // ------------------------------------------------
-
-                    if let image = selectedImage {
-
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 300)
-                            .cornerRadius(12)
-                    }
-
-
-                    // =================================================
-                    // Gemini analysis
-                    // =================================================
-
-                    if isScanning {
-
-                        // ---------------------------------------------
-                        // Gemini is currently analyzing the image
-                        // ---------------------------------------------
-
-                        VStack(spacing: 12) {
-
-                            ProgressView()
-                                .controlSize(.large)
-
-
-                            Label(
-                                "Gemini is analyzing the image…",
-                                systemImage: "sparkles"
-                            )
-                            .font(.headline)
-
-
-                            Text(
-                                "AI is identifying the vehicle assembly. This can take a few seconds."
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                        }
-                        .padding()
-
-
-                    } else if let scanError {
-
-                        // ---------------------------------------------
-                        // Friendly AI failure state
-                        // ---------------------------------------------
-
-                        VStack(spacing: 12) {
-
-                            Image(
-                                systemName:
-                                    "sparkles"
-                            )
-                            .font(.largeTitle)
-
-
-                            Text(
-                                "Couldn't analyze the image"
-                            )
-                            .font(.headline)
-
-
-                            Text(scanError)
-                                .font(.caption)
-                                .foregroundStyle(
-                                    .secondary
-                                )
-                                .multilineTextAlignment(
-                                    .center
-                                )
-
-
-                            // Retry the SAME cropped image.
-                            //
-                            // The user does not need to take the
-                            // photograph or crop it again.
-
-                            if let image = selectedImage {
-
-                                Button {
-
-                                    Task {
-
-                                        await scan(
-                                            image
-                                        )
-                                    }
-
-                                } label: {
-
-                                    Label(
-                                        "Try Again with Gemini",
-                                        systemImage:
-                                            "arrow.clockwise"
-                                    )
-                                }
-                                .buttonStyle(
-                                    .borderedProminent
-                                )
-                            }
-                        }
-                        .padding()
-
-
-                    } else if let result = scanResult {
-
-                        // ---------------------------------------------
-                        // Successful Gemini result
-                        // ---------------------------------------------
-
-                        VStack(spacing: 10) {
-
-                            Label(
-                                "AI Visual Analysis",
-                                systemImage:
-                                    "sparkles"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(
-                                .secondary
-                            )
-
-
-                            Text(
-                                "Detected Assembly"
-                            )
-                            .font(.caption)
-
-
-                            Text(
-
-                                result
-                                    .assemblyCode
-                                    .replacingOccurrences(
-                                        of: "_",
-                                        with: " "
-                                    )
-                            )
-                            .font(.title2)
-                            .bold()
-
-
-                            Text(
-                                "Confidence: \(Int(result.confidence * 100))%"
-                            )
-
-
-                            Text(
-                                "Identified with Gemini"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(
-                                .secondary
-                            )
-
-
-                            if result.assemblyCode
-                                != "UNKNOWN" {
-
-                                Button(
-                                    "Show Parts"
-                                ) {
-
-                                    Task {
-
-                                        await loadParts(
-                                            assemblyCode:
-                                                result
-                                                    .assemblyCode
-                                        )
-                                    }
-                                }
-                                .buttonStyle(
-                                    .borderedProminent
-                                )
-                                .disabled(
-                                    isLoadingParts
-                                )
-                            }
-                        }
-                    }
-
-
-                    // ------------------------------------------------
-                    // Parts loading
-                    // ------------------------------------------------
-
-                    if isLoadingParts {
-
-                        ProgressView(
-                            "Loading parts…"
-                        )
-                    }
-
-
-                    // ------------------------------------------------
-                    // Parts API error
-                    // ------------------------------------------------
-
-                    if let partsError {
-
-                        Text(partsError)
-                            .foregroundStyle(
-                                .red
-                            )
-                            .font(.caption)
-                            .multilineTextAlignment(
-                                .center
-                            )
-                    }
-
-
-                    // =================================================
-                    // Scan Golf
-                    // =================================================
-
-                    Button(
-                        "Scan Golf"
-                    ) {
-
-                        parts = []
-
-                        partsError = nil
-
-                        scanResult = nil
-
-                        scanError = nil
-
-                        showingAssemblyDiagram =
-                            false
-
-
-                        showImageSourceOptions =
-                            true
-                    }
-                    .buttonStyle(
-                        .borderedProminent
-                    )
-                    .disabled(
-                        isScanning ||
-                        !backendAvailable
-                    )
-
-
-                    // ------------------------------------------------
-                    // Camera / Photo Library selection
-                    // ------------------------------------------------
-
-                    .confirmationDialog(
-
-                        "Choose Image Source",
-
-                        isPresented:
-                            $showImageSourceOptions,
-
-                        titleVisibility:
-                            .visible
-
-                    ) {
-
-                        Button(
-                            "Take Photo"
-                        ) {
-
-                            showCamera =
-                                true
-                        }
-
-
-                        Button(
-                            "Choose from Photos"
-                        ) {
-
-                            showPhotoPicker =
-                                true
-                        }
-
-
-                        Button(
-                            "Cancel",
-                            role:
-                                .cancel
-                        ) {
-                        }
-                    }
-
-
-                    // ------------------------------------------------
-                    // General app status
-                    // ------------------------------------------------
-
-                    Text(status)
-                        .font(.caption)
-                        .multilineTextAlignment(
-                            .center
-                        )
-                        .textSelection(
-                            .enabled
-                        )
+                    signedInContent
                 }
             }
             .padding()
+        }
+
+
+        // ============================================================
+        // MARK: - Admin Sheet
+        // ============================================================
+
+        .sheet(
+            isPresented:
+                $showingAdmin
+        ) {
+
+            if let token = idToken {
+
+                AdminView(
+                    idToken: token
+                )
+            }
         }
 
 
@@ -514,21 +288,13 @@ struct ContentView: View {
                     onCrop: {
                         croppedImage in
 
-
-                        // Close crop screen.
-
                         showingImageCrop =
                             false
 
 
-                        // Store exactly the area that
-                        // will be sent to Gemini.
-
                         selectedImage =
                             croppedImage
 
-
-                        // Analyze selected region.
 
                         Task {
 
@@ -599,6 +365,789 @@ struct ContentView: View {
 
 
     // ================================================================
+    // MARK: - Signed-In Content
+    // ================================================================
+
+    @ViewBuilder
+    private var signedInContent:
+        some View {
+
+        switch accessState {
+
+        case .checking:
+
+            accessCheckingView
+
+
+        case .notRequested:
+
+            accessRequestView
+
+
+        case .pending:
+
+            accessPendingView
+
+
+        case .rejected:
+
+            accessRejectedView
+
+
+        case .approved:
+
+            approvedAppView
+        }
+    }
+
+
+    // ================================================================
+    // MARK: - Checking Access
+    // ================================================================
+
+    private var accessCheckingView:
+        some View {
+
+        VStack(spacing: 16) {
+
+            ProgressView()
+
+            Text(
+                "Checking your access…"
+            )
+            .font(.headline)
+
+            Text(
+                "Please wait while GolfParts verifies your account."
+            )
+            .font(.caption)
+            .foregroundStyle(
+                .secondary
+            )
+            .multilineTextAlignment(
+                .center
+            )
+        }
+        .padding()
+    }
+
+
+    // ================================================================
+    // MARK: - Access Not Requested
+    // ================================================================
+
+    private var accessRequestView:
+        some View {
+
+        VStack(spacing: 18) {
+
+            Image(
+                systemName:
+                    "lock.shield"
+            )
+            .font(
+                .system(size: 48)
+            )
+
+
+            Text(
+                "Access Required"
+            )
+            .font(.title2)
+            .bold()
+
+
+            Text(
+                "You need approval before you can use the GolfParts application."
+            )
+            .foregroundStyle(
+                .secondary
+            )
+            .multilineTextAlignment(
+                .center
+            )
+
+
+            if let accessError {
+
+                Text(accessError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(
+                        .center
+                    )
+            }
+
+
+            Button {
+
+                Task {
+
+                    await requestAccess()
+                }
+
+            } label: {
+
+                if isRequestingAccess {
+
+                    ProgressView()
+
+                } else {
+
+                    Label(
+                        "Request Access",
+                        systemImage:
+                            "paperplane"
+                    )
+                }
+            }
+            .buttonStyle(
+                .borderedProminent
+            )
+            .disabled(
+                isRequestingAccess
+            )
+        }
+        .padding()
+    }
+
+
+    // ================================================================
+    // MARK: - Pending Access
+    // ================================================================
+
+    private var accessPendingView:
+        some View {
+
+        VStack(spacing: 18) {
+
+            Image(
+                systemName:
+                    "clock.badge.questionmark"
+            )
+            .font(
+                .system(size: 48)
+            )
+
+
+            Text(
+                "Access Request Pending"
+            )
+            .font(.title2)
+            .bold()
+
+
+            Text(
+                "Your request has been sent to the administrator. Once it has been approved, you can continue using GolfParts."
+            )
+            .foregroundStyle(
+                .secondary
+            )
+            .multilineTextAlignment(
+                .center
+            )
+
+
+            if let accessError {
+
+                Text(accessError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(
+                        .center
+                    )
+            }
+
+
+            Button {
+
+                Task {
+
+                    await checkAccess()
+                }
+
+            } label: {
+
+                Label(
+                    "Check Again",
+                    systemImage:
+                        "arrow.clockwise"
+                )
+            }
+            .buttonStyle(
+                .borderedProminent
+            )
+        }
+        .padding()
+    }
+
+
+    // ================================================================
+    // MARK: - Rejected Access
+    // ================================================================
+
+    private var accessRejectedView:
+        some View {
+
+        VStack(spacing: 18) {
+
+            Image(
+                systemName:
+                    "xmark.shield"
+            )
+            .font(
+                .system(size: 48)
+            )
+
+
+            Text(
+                "Access Not Approved"
+            )
+            .font(.title2)
+            .bold()
+
+
+            Text(
+                "Your access request was not approved. You can submit a new request if needed."
+            )
+            .foregroundStyle(
+                .secondary
+            )
+            .multilineTextAlignment(
+                .center
+            )
+
+
+            if let accessError {
+
+                Text(accessError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(
+                        .center
+                    )
+            }
+
+
+            Button {
+
+                Task {
+
+                    await requestAccess()
+                }
+
+            } label: {
+
+                if isRequestingAccess {
+
+                    ProgressView()
+
+                } else {
+
+                    Label(
+                        "Request Again",
+                        systemImage:
+                            "paperplane"
+                    )
+                }
+            }
+            .buttonStyle(
+                .borderedProminent
+            )
+            .disabled(
+                isRequestingAccess
+            )
+        }
+        .padding()
+    }
+
+
+    // ================================================================
+    // MARK: - Approved Application
+    // ================================================================
+
+    @ViewBuilder
+    private var approvedAppView:
+        some View {
+
+        Text("Signed in ✓")
+            .font(.headline)
+
+
+        // ============================================================
+        // Admin Button
+        // ============================================================
+
+        if isAdmin {
+
+            Button {
+
+                showingAdmin =
+                    true
+
+            } label: {
+
+                Label(
+                    "Admin",
+                    systemImage:
+                        "person.badge.key"
+                )
+            }
+            .buttonStyle(
+                .bordered
+            )
+        }
+
+
+        // ------------------------------------------------------------
+        // Selected image
+        // ------------------------------------------------------------
+
+        if let image =
+            selectedImage {
+
+            Image(
+                uiImage:
+                    image
+            )
+            .resizable()
+            .scaledToFit()
+            .frame(
+                maxHeight:
+                    300
+            )
+            .cornerRadius(
+                12
+            )
+        }
+
+
+        // ============================================================
+        // Gemini Analysis
+        // ============================================================
+
+        if isScanning {
+
+            VStack(spacing: 12) {
+
+                ProgressView()
+                    .controlSize(
+                        .large
+                    )
+
+
+                Label(
+                    "Gemini is analyzing the image…",
+                    systemImage:
+                        "sparkles"
+                )
+                .font(.headline)
+
+
+                Text(
+                    "AI is identifying the vehicle assembly. This can take a few seconds."
+                )
+                .font(.caption)
+                .foregroundStyle(
+                    .secondary
+                )
+                .multilineTextAlignment(
+                    .center
+                )
+            }
+            .padding()
+
+
+        } else if let scanError {
+
+            VStack(spacing: 12) {
+
+                Image(
+                    systemName:
+                        "sparkles"
+                )
+                .font(
+                    .largeTitle
+                )
+
+
+                Text(
+                    "Couldn't analyze the image"
+                )
+                .font(
+                    .headline
+                )
+
+
+                Text(
+                    scanError
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+                .multilineTextAlignment(
+                    .center
+                )
+
+
+                if let image =
+                    selectedImage {
+
+                    Button {
+
+                        Task {
+
+                            await scan(
+                                image
+                            )
+                        }
+
+                    } label: {
+
+                        Label(
+                            "Try Again with Gemini",
+                            systemImage:
+                                "arrow.clockwise"
+                        )
+                    }
+                    .buttonStyle(
+                        .borderedProminent
+                    )
+                }
+            }
+            .padding()
+
+
+        } else if let result =
+            scanResult {
+
+            VStack(spacing: 10) {
+
+                Label(
+                    "AI Visual Analysis",
+                    systemImage:
+                        "sparkles"
+                )
+                .font(.caption)
+                .foregroundStyle(
+                    .secondary
+                )
+
+
+                Text(
+                    "Detected Assembly"
+                )
+                .font(.caption)
+
+
+                Text(
+                    result
+                        .assemblyCode
+                        .replacingOccurrences(
+                            of: "_",
+                            with: " "
+                        )
+                )
+                .font(.title2)
+                .bold()
+
+
+                Text(
+                    "Confidence: \(Int(result.confidence * 100))%"
+                )
+
+
+                Text(
+                    "Identified with Gemini"
+                )
+                .font(.caption)
+                .foregroundStyle(
+                    .secondary
+                )
+
+
+                if result
+                    .assemblyCode
+                    != "UNKNOWN" {
+
+                    Button(
+                        "Show Parts"
+                    ) {
+
+                        Task {
+
+                            await loadParts(
+                                assemblyCode:
+                                    result
+                                        .assemblyCode
+                            )
+                        }
+                    }
+                    .buttonStyle(
+                        .borderedProminent
+                    )
+                    .disabled(
+                        isLoadingParts
+                    )
+                }
+            }
+        }
+
+
+        // ------------------------------------------------------------
+        // Parts Loading
+        // ------------------------------------------------------------
+
+        if isLoadingParts {
+
+            ProgressView(
+                "Loading parts…"
+            )
+        }
+
+
+        // ------------------------------------------------------------
+        // Parts Error
+        // ------------------------------------------------------------
+
+        if let partsError {
+
+            Text(
+                partsError
+            )
+            .foregroundStyle(
+                .red
+            )
+            .font(
+                .caption
+            )
+            .multilineTextAlignment(
+                .center
+            )
+        }
+
+
+        // ============================================================
+        // Scan Golf
+        // ============================================================
+
+        Button(
+            "Scan Golf"
+        ) {
+
+            parts =
+                []
+
+            partsError =
+                nil
+
+            scanResult =
+                nil
+
+            scanError =
+                nil
+
+            showingAssemblyDiagram =
+                false
+
+            showImageSourceOptions =
+                true
+        }
+        .buttonStyle(
+            .borderedProminent
+        )
+        .disabled(
+            isScanning ||
+            !backendAvailable
+        )
+
+
+        .confirmationDialog(
+
+            "Choose Image Source",
+
+            isPresented:
+                $showImageSourceOptions,
+
+            titleVisibility:
+                .visible
+
+        ) {
+
+            Button(
+                "Take Photo"
+            ) {
+
+                showCamera =
+                    true
+            }
+
+
+            Button(
+                "Choose from Photos"
+            ) {
+
+                showPhotoPicker =
+                    true
+            }
+
+
+            Button(
+                "Cancel",
+                role:
+                    .cancel
+            ) {
+            }
+        }
+
+
+        Text(status)
+            .font(.caption)
+            .multilineTextAlignment(
+                .center
+            )
+            .textSelection(
+                .enabled
+            )
+    }
+
+
+    // ================================================================
+    // MARK: - Check Access
+    // ================================================================
+
+    @MainActor
+    private func checkAccess() async {
+
+        guard let token =
+                idToken else {
+
+            accessError =
+                "No Google ID token available."
+
+            return
+        }
+
+
+        accessError =
+            nil
+
+
+        do {
+
+            let response =
+                try await accessAPIService
+                    .getMyAccessStatus(
+                        idToken:
+                            token
+                    )
+
+
+            updateAccessState(
+                response.status
+            )
+
+
+        } catch {
+
+            accessError =
+                error.localizedDescription
+        }
+    }
+
+
+    // ================================================================
+    // MARK: - Request Access
+    // ================================================================
+
+    @MainActor
+    private func requestAccess() async {
+
+        guard let token =
+                idToken else {
+
+            accessError =
+                "No Google ID token available."
+
+            return
+        }
+
+
+        isRequestingAccess =
+            true
+
+        accessError =
+            nil
+
+
+        do {
+
+            let response =
+                try await accessAPIService
+                    .requestAccess(
+                        idToken:
+                            token
+                    )
+
+
+            updateAccessState(
+                response.status
+            )
+
+
+        } catch {
+
+            accessError =
+                error.localizedDescription
+        }
+
+
+        isRequestingAccess =
+            false
+    }
+
+
+    // ================================================================
+    // MARK: - Convert Backend Status to UI State
+    // ================================================================
+
+    @MainActor
+    private func updateAccessState(
+        _ status: String
+    ) {
+
+        switch status {
+
+        case "APPROVED":
+
+            accessState =
+                .approved
+
+
+        case "PENDING":
+
+            accessState =
+                .pending
+
+
+        case "REJECTED":
+
+            accessState =
+                .rejected
+
+
+        default:
+
+            accessState =
+                .notRequested
+        }
+    }
+
+
+    // ================================================================
     // MARK: - Prepare New Image
     // ================================================================
 
@@ -610,22 +1159,17 @@ struct ContentView: View {
         selectedImage =
             image
 
-
         scanResult =
             nil
-
 
         scanError =
             nil
 
-
         parts =
             []
 
-
         partsError =
             nil
-
 
         showingAssemblyDiagram =
             false
@@ -641,7 +1185,6 @@ struct ContentView: View {
 
         backendAvailable =
             false
-
 
         backendStatus =
             "Starting service…"
@@ -688,6 +1231,16 @@ struct ContentView: View {
         }
 
 
+        guard accessState ==
+                .approved else {
+
+            status =
+                "Your account does not have access."
+
+            return
+        }
+
+
         guard let imageData =
                 image.jpegData(
                     compressionQuality:
@@ -703,22 +1256,14 @@ struct ContentView: View {
 
         do {
 
-            // Clear any previous AI error.
-
             scanError =
                 nil
-
-
-            // Clear old result so the progress
-            // screen is displayed cleanly.
 
             scanResult =
                 nil
 
-
             isScanning =
                 true
-
 
             status =
                 "Gemini analysis in progress…"
@@ -742,25 +1287,11 @@ struct ContentView: View {
             scanResult =
                 result
 
-
             status =
                 "Analysis complete"
 
 
         } catch {
-
-            // --------------------------------------------------------
-            // User-friendly AI error
-            // --------------------------------------------------------
-            //
-            // For now we use this friendly message for scan failures.
-            //
-            // In the next backend improvement we can distinguish:
-            //
-            // Gemini/provider unavailable
-            //            vs
-            // genuine Spring Boot error.
-            //
 
             scanError =
                 """
@@ -768,7 +1299,6 @@ struct ContentView: View {
 
                 Please try again.
                 """
-
 
             status =
                 "AI analysis unsuccessful"
@@ -799,11 +1329,20 @@ struct ContentView: View {
         }
 
 
+        guard accessState ==
+                .approved else {
+
+            partsError =
+                "Your account does not have access."
+
+            return
+        }
+
+
         do {
 
             isLoadingParts =
                 true
-
 
             partsError =
                 nil
@@ -821,13 +1360,9 @@ struct ContentView: View {
                     )
 
 
-            // Store real parts returned by PostgreSQL.
-
             parts =
                 loadedParts
 
-
-            // Open exploded visual assembly screen.
 
             showingAssemblyDiagram =
                 true
@@ -860,7 +1395,6 @@ struct ContentView: View {
                     .shared
                     .connectedScenes
                     .compactMap({
-
                         $0 as? UIWindowScene
                     })
                     .first(where: {
@@ -895,7 +1429,6 @@ struct ContentView: View {
                 try await GIDSignIn
                     .sharedInstance
                     .signIn(
-
                         withPresenting:
                             presenter
                     )
@@ -986,8 +1519,6 @@ struct ContentView: View {
                 ) ?? ""
 
 
-            // Never print the Google ID token.
-
             print(
                 "API /me HTTP:",
                 code
@@ -1002,15 +1533,62 @@ struct ContentView: View {
 
             if code == 200 {
 
+                struct MeResponse:
+                    Codable {
+
+                    let subject:
+                        String
+                }
+
+
+                if let me =
+                    try? JSONDecoder()
+                        .decode(
+                            MeResponse.self,
+                            from:
+                                data
+                        ) {
+
+                    currentGoogleSub =
+                        me.subject
+                }
+
+
+                // Google authentication succeeded.
                 isSignedIn =
                     true
 
 
+                // ----------------------------------------------------
+                // IMPORTANT:
+                // Authentication does NOT automatically mean the user
+                // is allowed to use GolfParts.
+                // ----------------------------------------------------
+
+                accessState =
+                    .checking
+
+
                 status =
-                    "API connection successful"
+                    "Checking application access…"
+
+
+                // Now ask our access-control API whether this user is
+                // approved, pending, rejected or has never requested.
+                await checkAccess()
+
+
+                status =
+                    "Signed in with Google"
 
 
             } else {
+
+                currentGoogleSub =
+                    nil
+
+                isSignedIn =
+                    false
 
                 status =
                     """
@@ -1023,6 +1601,12 @@ struct ContentView: View {
 
 
         } catch {
+
+            currentGoogleSub =
+                nil
+
+            isSignedIn =
+                false
 
             status =
                 """
