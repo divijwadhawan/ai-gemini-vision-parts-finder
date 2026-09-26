@@ -81,7 +81,7 @@ public class SecurityConfig {
                         .authenticated()
 
                        // Allow Spring to return application errors
-                        .requestMatchers("/error")
+                        .requestMatchers("/health", "/error")
                         .permitAll()
 
                         // Everything else is blocked
