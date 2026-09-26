@@ -8,16 +8,6 @@ struct ContentView: View {
     // ============================================================
     // MARK: - Backend / Render Status
     // ============================================================
-    //
-    // Render's free web service can go to sleep when it has not
-    // received traffic for some time.
-    //
-    // When this view opens, we call our /health endpoint.
-    // This:
-    //
-    // 1. Wakes Render as early as possible.
-    // 2. Tells the user whether the backend is ready.
-    //
 
     @State private var backendStatus = "Starting service…"
     @State private var backendAvailable = false
@@ -28,15 +18,6 @@ struct ContentView: View {
     // ============================================================
     // MARK: - Google Authentication
     // ============================================================
-    //
-    // idToken:
-    // Google gives us an ID token after successful login.
-    // We send this token to Spring Boot in the Authorization header.
-    //
-    // isSignedIn:
-    // Controls whether we show the Google login screen or the
-    // actual GolfParts application.
-    //
 
     @State private var status = "Ready to sign in"
     @State private var idToken: String?
@@ -46,53 +27,26 @@ struct ContentView: View {
     // ============================================================
     // MARK: - Image Selection
     // ============================================================
-    //
-    // The user can either:
-    //
-    // 1. Take a new picture with the iPhone camera.
-    // 2. Select an existing image from the photo library.
-    //
-    // After an image is selected, we DO NOT immediately send it
-    // to Gemini anymore.
-    //
-    // Instead:
-    //
-    // Image
-    //   ↓
-    // Crop / Zoom
-    //   ↓
-    // Cropped UIImage
-    //   ↓
-    // Gemini
-    //
 
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showImageSourceOptions = false
 
-    // Original image selected/taken by the user.
-    // After cropping, this becomes the cropped image.
     @State private var selectedImage: UIImage?
 
-    // Controls whether ImageCropView is visible.
     @State private var showingImageCrop = false
 
 
     // ============================================================
     // MARK: - AI Scan
     // ============================================================
-    //
-    // scanResult contains the result returned by Spring Boot.
-    //
-    // Example:
-    //
-    // assemblyCode = "FRONT_BUMPER"
-    // confidence   = 0.95
-    // boundingBox  = ...
-    //
 
     @State private var scanResult: ScanResult?
+
     @State private var isScanning = false
+
+    // Friendly error shown when AI analysis fails.
+    @State private var scanError: String?
 
     private let scanAPIService = ScanAPIService()
 
@@ -100,18 +54,14 @@ struct ContentView: View {
     // ============================================================
     // MARK: - Assembly Parts
     // ============================================================
-    //
-    // After Gemini detects an assembly, the user can press
-    // "Show Parts".
-    //
-    // We then request:
-    //
-    // GET /assemblies/{assemblyCode}/parts
-    //
 
     @State private var parts: [CarPart] = []
+
     @State private var isLoadingParts = false
+
     @State private var partsError: String?
+
+    @State private var showingAssemblyDiagram = false
 
     private let partsAPIService = PartsAPIService()
 
@@ -152,6 +102,7 @@ struct ContentView: View {
                             height: 10
                         )
 
+
                     Text(backendStatus)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -167,6 +118,7 @@ struct ContentView: View {
                     GoogleSignInButton {
 
                         Task {
+
                             await signIn()
                         }
                     }
@@ -190,16 +142,8 @@ struct ContentView: View {
 
 
                     // ------------------------------------------------
-                    // Selected vehicle image
+                    // Selected image
                     // ------------------------------------------------
-                    //
-                    // Before cropping:
-                    // selectedImage contains the original photograph.
-                    //
-                    // After "Analyze Selection":
-                    // selectedImage contains the actual cropped image
-                    // that was sent to Gemini.
-                    //
 
                     if let image = selectedImage {
 
@@ -211,38 +155,131 @@ struct ContentView: View {
                     }
 
 
-                    // ------------------------------------------------
-                    // AI analysis state
-                    // ------------------------------------------------
+                    // =================================================
+                    // Gemini analysis
+                    // =================================================
 
                     if isScanning {
 
-                        ProgressView(
-                            "Analyzing Golf…"
-                        )
+                        // ---------------------------------------------
+                        // Gemini is currently analyzing the image
+                        // ---------------------------------------------
+
+                        VStack(spacing: 12) {
+
+                            ProgressView()
+                                .controlSize(.large)
+
+
+                            Label(
+                                "Gemini is analyzing the image…",
+                                systemImage: "sparkles"
+                            )
+                            .font(.headline)
+
+
+                            Text(
+                                "AI is identifying the vehicle assembly. This can take a few seconds."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        }
+                        .padding()
+
+
+                    } else if let scanError {
+
+                        // ---------------------------------------------
+                        // Friendly AI failure state
+                        // ---------------------------------------------
+
+                        VStack(spacing: 12) {
+
+                            Image(
+                                systemName:
+                                    "sparkles"
+                            )
+                            .font(.largeTitle)
+
+
+                            Text(
+                                "Couldn't analyze the image"
+                            )
+                            .font(.headline)
+
+
+                            Text(scanError)
+                                .font(.caption)
+                                .foregroundStyle(
+                                    .secondary
+                                )
+                                .multilineTextAlignment(
+                                    .center
+                                )
+
+
+                            // Retry the SAME cropped image.
+                            //
+                            // The user does not need to take the
+                            // photograph or crop it again.
+
+                            if let image = selectedImage {
+
+                                Button {
+
+                                    Task {
+
+                                        await scan(
+                                            image
+                                        )
+                                    }
+
+                                } label: {
+
+                                    Label(
+                                        "Try Again with Gemini",
+                                        systemImage:
+                                            "arrow.clockwise"
+                                    )
+                                }
+                                .buttonStyle(
+                                    .borderedProminent
+                                )
+                            }
+                        }
+                        .padding()
+
 
                     } else if let result = scanResult {
 
-                        // --------------------------------------------
-                        // AI result
-                        // --------------------------------------------
+                        // ---------------------------------------------
+                        // Successful Gemini result
+                        // ---------------------------------------------
 
                         VStack(spacing: 10) {
 
-                            Text("Detected Assembly")
-                                .font(.caption)
+                            Label(
+                                "AI Visual Analysis",
+                                systemImage:
+                                    "sparkles"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(
+                                .secondary
+                            )
 
-
-                            // Convert:
-                            //
-                            // FRONT_BUMPER
-                            //
-                            // into:
-                            //
-                            // FRONT BUMPER
 
                             Text(
-                                result.assemblyCode
+                                "Detected Assembly"
+                            )
+                            .font(.caption)
+
+
+                            Text(
+
+                                result
+                                    .assemblyCode
                                     .replacingOccurrences(
                                         of: "_",
                                         with: " "
@@ -252,29 +289,33 @@ struct ContentView: View {
                             .bold()
 
 
-                            // Gemini returns confidence as 0...1.
-                            //
-                            // Example:
-                            //
-                            // 0.95 -> 95%
-
                             Text(
                                 "Confidence: \(Int(result.confidence * 100))%"
                             )
 
 
-                            // UNKNOWN means Gemini could not reliably
-                            // identify one of our supported assemblies.
+                            Text(
+                                "Identified with Gemini"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(
+                                .secondary
+                            )
 
-                            if result.assemblyCode != "UNKNOWN" {
 
-                                Button("Show Parts") {
+                            if result.assemblyCode
+                                != "UNKNOWN" {
+
+                                Button(
+                                    "Show Parts"
+                                ) {
 
                                     Task {
 
                                         await loadParts(
                                             assemblyCode:
-                                                result.assemblyCode
+                                                result
+                                                    .assemblyCode
                                         )
                                     }
                                 }
@@ -290,7 +331,7 @@ struct ContentView: View {
 
 
                     // ------------------------------------------------
-                    // Parts loading indicator
+                    // Parts loading
                     // ------------------------------------------------
 
                     if isLoadingParts {
@@ -308,7 +349,9 @@ struct ContentView: View {
                     if let partsError {
 
                         Text(partsError)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(
+                                .red
+                            )
                             .font(.caption)
                             .multilineTextAlignment(
                                 .center
@@ -316,129 +359,28 @@ struct ContentView: View {
                     }
 
 
-                    // ------------------------------------------------
-                    // Assembly Parts List
-                    // ------------------------------------------------
-                    //
-                    // These parts come from PostgreSQL through our
-                    // Spring Boot catalog API.
-                    //
+                    // =================================================
+                    // Scan Golf
+                    // =================================================
 
-                    if !parts.isEmpty {
-
-                        Divider()
-
-                        Text("Assembly Parts")
-                            .font(.title2)
-                            .bold()
-
-                        VStack(spacing: 12) {
-
-                            ForEach(parts) { part in
-
-                                HStack(
-                                    alignment: .top,
-                                    spacing: 12
-                                ) {
-
-                                    // Part callout number
-
-                                    Text(
-                                        "\(part.calloutNumber)"
-                                    )
-                                    .font(.headline)
-                                    .frame(
-                                        width: 32,
-                                        height: 32
-                                    )
-                                    .background(
-                                        Color.gray
-                                            .opacity(0.15)
-                                    )
-                                    .clipShape(
-                                        Circle()
-                                    )
-
-
-                                    // Part information
-
-                                    VStack(
-                                        alignment: .leading,
-                                        spacing: 4
-                                    ) {
-
-                                        Text(part.name)
-                                            .font(.headline)
-
-
-                                        // Demo/reference number
-
-                                        Text(
-                                            part.referenceNumber
-                                        )
-                                        .font(.caption)
-                                        .foregroundStyle(
-                                            .secondary
-                                        )
-
-
-                                        // Optional description
-
-                                        if let description =
-                                                part.description,
-                                           !description.isEmpty {
-
-                                            Text(description)
-                                                .font(
-                                                    .caption
-                                                )
-                                        }
-
-
-                                        // Demo price
-
-                                        Text(
-                                            "€\(part.price, specifier: "%.2f")"
-                                        )
-                                        .font(.subheadline)
-                                        .bold()
-                                    }
-
-                                    Spacer()
-                                }
-                                .padding()
-                                .background(
-                                    Color.gray
-                                        .opacity(0.08)
-                                )
-                                .cornerRadius(12)
-                            }
-                        }
-                    }
-
-
-                    // ------------------------------------------------
-                    // Scan Golf Button
-                    // ------------------------------------------------
-                    //
-                    // Disabled while:
-                    //
-                    // 1. Gemini is already analyzing something.
-                    // 2. Render backend is not ready yet.
-                    //
-
-                    Button("Scan Golf") {
-
-                        // Clear results from previous scan.
+                    Button(
+                        "Scan Golf"
+                    ) {
 
                         parts = []
+
                         partsError = nil
+
                         scanResult = nil
 
-                        // Ask user whether they want camera
-                        // or photo library.
+                        scanError = nil
 
-                        showImageSourceOptions = true
+                        showingAssemblyDiagram =
+                            false
+
+
+                        showImageSourceOptions =
+                            true
                     }
                     .buttonStyle(
                         .borderedProminent
@@ -450,38 +392,50 @@ struct ContentView: View {
 
 
                     // ------------------------------------------------
-                    // Camera / Photo Library choice
+                    // Camera / Photo Library selection
                     // ------------------------------------------------
 
                     .confirmationDialog(
+
                         "Choose Image Source",
+
                         isPresented:
                             $showImageSourceOptions,
-                        titleVisibility: .visible
+
+                        titleVisibility:
+                            .visible
+
                     ) {
 
-                        Button("Take Photo") {
+                        Button(
+                            "Take Photo"
+                        ) {
 
-                            showCamera = true
+                            showCamera =
+                                true
                         }
+
 
                         Button(
                             "Choose from Photos"
                         ) {
 
-                            showPhotoPicker = true
+                            showPhotoPicker =
+                                true
                         }
+
 
                         Button(
                             "Cancel",
-                            role: .cancel
+                            role:
+                                .cancel
                         ) {
                         }
                     }
 
 
                     // ------------------------------------------------
-                    // General application status
+                    // General app status
                     // ------------------------------------------------
 
                     Text(status)
@@ -489,7 +443,9 @@ struct ContentView: View {
                         .multilineTextAlignment(
                             .center
                         )
-                        .textSelection(.enabled)
+                        .textSelection(
+                            .enabled
+                        )
                 }
             }
             .padding()
@@ -497,106 +453,121 @@ struct ContentView: View {
 
 
         // ============================================================
-        // MARK: - Photo Library Sheet
+        // MARK: - Photo Library
         // ============================================================
-        //
-        // Opens the iPhone photo library.
-        //
-        // IMPORTANT:
-        // We no longer call scan(image) here.
-        //
-        // The image is first sent to ImageCropView.
-        //
 
         .sheet(
-            isPresented: $showPhotoPicker
+            isPresented:
+                $showPhotoPicker
         ) {
 
             PhotoPicker { image in
 
-                prepareNewImage(image)
+                prepareNewImage(
+                    image
+                )
 
-                // Open crop/zoom screen.
-                showingImageCrop = true
+                showingImageCrop =
+                    true
             }
         }
 
 
         // ============================================================
-        // MARK: - Camera Sheet
+        // MARK: - Camera
         // ============================================================
-        //
-        // Opens the iPhone camera.
-        //
-        // NSCameraUsageDescription must exist in Info.plist.
-        //
-        // Again, we do not analyze immediately.
-        //
 
         .sheet(
-            isPresented: $showCamera
+            isPresented:
+                $showCamera
         ) {
 
             CameraPicker { image in
 
-                prepareNewImage(image)
+                prepareNewImage(
+                    image
+                )
 
-                // Open crop/zoom screen.
-                showingImageCrop = true
+                showingImageCrop =
+                    true
             }
         }
 
 
         // ============================================================
-        // MARK: - Image Crop / Zoom Sheet
+        // MARK: - Crop / Zoom
         // ============================================================
-        //
-        // This is the new step in our workflow.
-        //
-        // Original photograph
-        //       ↓
-        // ImageCropView
-        //       ↓
-        // User zooms + drags
-        //       ↓
-        // User presses "Analyze Selection"
-        //       ↓
-        // Cropped UIImage
-        //       ↓
-        // scan()
-        //
 
         .sheet(
-            isPresented: $showingImageCrop
+            isPresented:
+                $showingImageCrop
         ) {
 
-            if let image = selectedImage {
+            if let image =
+                selectedImage {
 
                 ImageCropView(
-                    image: image,
 
-                    onCrop: { croppedImage in
+                    image:
+                        image,
+
+                    onCrop: {
+                        croppedImage in
+
 
                         // Close crop screen.
-                        showingImageCrop = false
 
-                        // Store the actual cropped image.
-                        //
-                        // This means the image displayed on the main
-                        // screen is exactly what we sent to Gemini.
-                        selectedImage = croppedImage
+                        showingImageCrop =
+                            false
 
-                        // Analyze ONLY the selected crop.
+
+                        // Store exactly the area that
+                        // will be sent to Gemini.
+
+                        selectedImage =
+                            croppedImage
+
+
+                        // Analyze selected region.
+
                         Task {
-                            await scan(croppedImage)
+
+                            await scan(
+                                croppedImage
+                            )
                         }
                     },
 
                     onCancel: {
 
-                        // User decided not to analyze this image.
-                        showingImageCrop = false
+                        showingImageCrop =
+                            false
                     }
+                )
+            }
+        }
+
+
+        // ============================================================
+        // MARK: - Visual Assembly Diagram
+        // ============================================================
+
+        .sheet(
+            isPresented:
+                $showingAssemblyDiagram
+        ) {
+
+            if let result =
+                scanResult {
+
+                AssemblyDiagramView(
+
+                    assemblyCode:
+                        result
+                            .assemblyCode,
+
+                    parts:
+                        parts
                 )
             }
         }
@@ -608,20 +579,17 @@ struct ContentView: View {
 
         .onOpenURL { url in
 
-            GIDSignIn.sharedInstance
-                .handle(url)
+            GIDSignIn
+                .sharedInstance
+                .handle(
+                    url
+                )
         }
 
 
         // ============================================================
-        // MARK: - Wake Render When App Opens
+        // MARK: - Wake Render
         // ============================================================
-        //
-        // SwiftUI runs this task when ContentView appears.
-        //
-        // This means Render begins waking BEFORE the user tries
-        // to scan a vehicle.
-        //
 
         .task {
 
@@ -633,52 +601,60 @@ struct ContentView: View {
     // ================================================================
     // MARK: - Prepare New Image
     // ================================================================
-    //
-    // Whenever the user selects/takes another picture, clear the
-    // previous AI result and parts.
-    //
 
     @MainActor
     private func prepareNewImage(
         _ image: UIImage
     ) {
 
-        selectedImage = image
+        selectedImage =
+            image
 
-        scanResult = nil
 
-        parts = []
+        scanResult =
+            nil
 
-        partsError = nil
+
+        scanError =
+            nil
+
+
+        parts =
+            []
+
+
+        partsError =
+            nil
+
+
+        showingAssemblyDiagram =
+            false
     }
 
 
     // ================================================================
     // MARK: - Backend Health Check
     // ================================================================
-    //
-    // BackendStatusService repeatedly calls:
-    //
-    // https://api.divijwadhawan.com/health
-    //
-    // If Render is sleeping, this first request wakes it.
-    //
-    // When Spring Boot responds with HTTP 200, the service is ready.
-    //
 
     @MainActor
     private func checkBackend() async {
 
-        backendAvailable = false
+        backendAvailable =
+            false
+
 
         backendStatus =
             "Starting service…"
+
 
         let available =
             await backendStatusService
                 .waitUntilAvailable()
 
-        backendAvailable = available
+
+        backendAvailable =
+            available
+
 
         if available {
 
@@ -694,38 +670,16 @@ struct ContentView: View {
 
 
     // ================================================================
-    // MARK: - Scan Image
+    // MARK: - Scan Image with Gemini
     // ================================================================
-    //
-    // IMPORTANT:
-    //
-    // The UIImage arriving here is now the CROPPED image produced
-    // by ImageCropView rather than the original whole-car image.
-    //
-    // Flow:
-    //
-    // Cropped UIImage
-    //       ↓
-    // JPEG
-    //       ↓
-    // POST /scan
-    //       ↓
-    // Spring Boot
-    //       ↓
-    // Gemini
-    //       ↓
-    // ScanResult
-    //
 
     @MainActor
     private func scan(
         _ image: UIImage
     ) async {
 
-        // We need the Google ID token so Spring Security knows
-        // which user is making the request.
-
-        guard let token = idToken else {
+        guard let token =
+                idToken else {
 
             status =
                 "No Google ID token available."
@@ -734,11 +688,10 @@ struct ContentView: View {
         }
 
 
-        // Convert UIImage into JPEG data before uploading.
-
         guard let imageData =
                 image.jpegData(
-                    compressionQuality: 0.85
+                    compressionQuality:
+                        0.85
                 ) else {
 
             status =
@@ -750,65 +703,94 @@ struct ContentView: View {
 
         do {
 
-            isScanning = true
+            // Clear any previous AI error.
+
+            scanError =
+                nil
+
+
+            // Clear old result so the progress
+            // screen is displayed cleanly.
+
+            scanResult =
+                nil
+
+
+            isScanning =
+                true
+
 
             status =
-                "Analyzing image…"
+                "Gemini analysis in progress…"
 
-
-            // Send image to our Spring Boot API.
 
             let result =
                 try await scanAPIService
                     .scanImage(
-                        imageData: imageData,
-                        mimeType: "image/jpeg",
-                        idToken: token
+
+                        imageData:
+                            imageData,
+
+                        mimeType:
+                            "image/jpeg",
+
+                        idToken:
+                            token
                     )
 
 
-            // Save result into SwiftUI state.
-            // This automatically updates the screen.
+            scanResult =
+                result
 
-            scanResult = result
 
             status =
                 "Analysis complete"
 
+
         } catch {
 
+            // --------------------------------------------------------
+            // User-friendly AI error
+            // --------------------------------------------------------
+            //
+            // For now we use this friendly message for scan failures.
+            //
+            // In the next backend improvement we can distinguish:
+            //
+            // Gemini/provider unavailable
+            //            vs
+            // genuine Spring Boot error.
+            //
+
+            scanError =
+                """
+                We're using the Gemini free service, which can occasionally be busy or respond slowly.
+
+                Please try again.
+                """
+
+
             status =
-                "Scan failed:\n\(error.localizedDescription)"
+                "AI analysis unsuccessful"
         }
 
 
-        isScanning = false
+        isScanning =
+            false
     }
 
 
     // ================================================================
     // MARK: - Load Assembly Parts
     // ================================================================
-    //
-    // Example:
-    //
-    // assemblyCode = FRONT_BUMPER
-    //
-    // Request:
-    //
-    // GET /assemblies/FRONT_BUMPER/parts
-    //
-    // Response:
-    //
-    // [CarPart]
-    //
 
     @MainActor
     private func loadParts(
         assemblyCode: String
     ) async {
 
-        guard let token = idToken else {
+        guard let token =
+                idToken else {
 
             partsError =
                 "No Google ID token available."
@@ -819,65 +801,66 @@ struct ContentView: View {
 
         do {
 
-            isLoadingParts = true
+            isLoadingParts =
+                true
 
-            partsError = nil
+
+            partsError =
+                nil
 
 
             let loadedParts =
                 try await partsAPIService
                     .getParts(
+
                         assemblyCode:
                             assemblyCode,
-                        idToken: token
+
+                        idToken:
+                            token
                     )
 
 
-            // Updating this state automatically redraws
-            // the parts list.
+            // Store real parts returned by PostgreSQL.
 
-            parts = loadedParts
+            parts =
+                loadedParts
+
+
+            // Open exploded visual assembly screen.
+
+            showingAssemblyDiagram =
+                true
+
 
         } catch {
 
             partsError =
-                "Could not load parts:\n\(error.localizedDescription)"
+                """
+                Could not load parts:
+                \(error.localizedDescription)
+                """
         }
 
 
-        isLoadingParts = false
+        isLoadingParts =
+            false
     }
 
 
     // ================================================================
     // MARK: - Google Sign-In
     // ================================================================
-    //
-    // Flow:
-    //
-    // Google login
-    //      ↓
-    // Google ID Token
-    //      ↓
-    // GET /me
-    //      ↓
-    // Spring Security validates Google token
-    //      ↓
-    // User allowed into app
-    //
 
     @MainActor
     private func signIn() async {
 
-        // Find the currently active iPhone window.
-        //
-        // Google Sign-In needs a UIViewController from which
-        // it can present Google's login screen.
-
         guard let scene =
-                UIApplication.shared
+                UIApplication
+                    .shared
                     .connectedScenes
                     .compactMap({
+
                         $0 as? UIWindowScene
                     })
                     .first(where: {
@@ -887,7 +870,8 @@ struct ContentView: View {
                     }),
 
               let presenter =
-                scene.windows
+                scene
+                    .windows
                     .first(where: {
 
                         $0.isKeyWindow
@@ -907,21 +891,19 @@ struct ContentView: View {
                 "Signing in with Google…"
 
 
-            // Open Google's authentication screen.
-
             let result =
                 try await GIDSignIn
                     .sharedInstance
                     .signIn(
+
                         withPresenting:
                             presenter
                     )
 
 
-            // Retrieve Google's ID token.
-
             guard let token =
-                    result.user
+                    result
+                        .user
                         .idToken?
                         .tokenString else {
 
@@ -932,21 +914,19 @@ struct ContentView: View {
             }
 
 
-            // Keep token in memory so subsequent API calls can use it.
+            idToken =
+                token
 
-            idToken = token
-
-
-            // Verify that our backend accepts this Google user.
 
             status =
                 "Checking API access…"
 
 
-            guard let url = URL(
-                string:
-                    "https://api.divijwadhawan.com/me"
-            ) else {
+            guard let url =
+                    URL(
+                        string:
+                            "https://api.divijwadhawan.com/me"
+                    ) else {
 
                 status =
                     "Invalid API URL."
@@ -956,50 +936,63 @@ struct ContentView: View {
 
 
             var request =
-                URLRequest(url: url)
+                URLRequest(
+                    url:
+                        url
+                )
+
 
             request.httpMethod =
                 "GET"
 
 
-            // Spring Security expects:
-            //
-            // Authorization: Bearer <Google-ID-token>
-
             request.setValue(
+
                 "Bearer \(token)",
+
                 forHTTPHeaderField:
                     "Authorization"
             )
 
 
-            let (data, response) =
-                try await URLSession.shared
+            let (
+                data,
+                response
+            ) =
+                try await URLSession
+                    .shared
                     .data(
-                        for: request
+                        for:
+                            request
                     )
 
 
             let code =
-                (response as? HTTPURLResponse)?
-                    .statusCode ?? 0
+                (response
+                    as? HTTPURLResponse)?
+                    .statusCode
+                ?? 0
 
 
             let responseBody =
                 String(
-                    data: data,
-                    encoding: .utf8
+
+                    data:
+                        data,
+
+                    encoding:
+                        .utf8
+
                 ) ?? ""
 
 
-            // Useful during development.
-            //
-            // We intentionally do NOT print the Google token.
+            // Never print the Google ID token.
 
             print(
                 "API /me HTTP:",
                 code
             )
+
 
             print(
                 "API /me response:",
@@ -1007,14 +1000,15 @@ struct ContentView: View {
             )
 
 
-            // HTTP 200 means authentication succeeded.
-
             if code == 200 {
 
-                isSignedIn = true
+                isSignedIn =
+                    true
+
 
                 status =
                     "API connection successful"
+
 
             } else {
 
