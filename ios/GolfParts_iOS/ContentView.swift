@@ -2,6 +2,7 @@ import SwiftUI
 import GoogleSignIn
 import GoogleSignInSwift
 
+
 struct ContentView: View {
 
     // ============================================================
@@ -12,17 +13,16 @@ struct ContentView: View {
     // received traffic for some time.
     //
     // When this view opens, we call our /health endpoint.
-    // This has two purposes:
+    // This:
     //
-    // 1. Wake up the Render backend as early as possible.
-    // 2. Tell the user whether the backend is ready.
+    // 1. Wakes Render as early as possible.
+    // 2. Tells the user whether the backend is ready.
     //
 
     @State private var backendStatus = "Starting service…"
     @State private var backendAvailable = false
 
-    private let backendStatusService =
-        BackendStatusService()
+    private let backendStatusService = BackendStatusService()
 
 
     // ============================================================
@@ -52,20 +52,37 @@ struct ContentView: View {
     // 1. Take a new picture with the iPhone camera.
     // 2. Select an existing image from the photo library.
     //
+    // After an image is selected, we DO NOT immediately send it
+    // to Gemini anymore.
+    //
+    // Instead:
+    //
+    // Image
+    //   ↓
+    // Crop / Zoom
+    //   ↓
+    // Cropped UIImage
+    //   ↓
+    // Gemini
+    //
 
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showImageSourceOptions = false
 
-    // Stores the image selected/taken by the user.
+    // Original image selected/taken by the user.
+    // After cropping, this becomes the cropped image.
     @State private var selectedImage: UIImage?
+
+    // Controls whether ImageCropView is visible.
+    @State private var showingImageCrop = false
 
 
     // ============================================================
     // MARK: - AI Scan
     // ============================================================
     //
-    // scanResult contains the result returned by our Spring API.
+    // scanResult contains the result returned by Spring Boot.
     //
     // Example:
     //
@@ -73,15 +90,11 @@ struct ContentView: View {
     // confidence   = 0.95
     // boundingBox  = ...
     //
-    // isScanning is used to show a loading indicator while Gemini
-    // analyzes the image.
-    //
 
     @State private var scanResult: ScanResult?
     @State private var isScanning = false
 
-    private let scanAPIService =
-        ScanAPIService()
+    private let scanAPIService = ScanAPIService()
 
 
     // ============================================================
@@ -95,15 +108,12 @@ struct ContentView: View {
     //
     // GET /assemblies/{assemblyCode}/parts
     //
-    // from our Spring Boot backend.
-    //
 
     @State private var parts: [CarPart] = []
     @State private var isLoadingParts = false
     @State private var partsError: String?
 
-    private let partsAPIService =
-        PartsAPIService()
+    private let partsAPIService = PartsAPIService()
 
 
     // ============================================================
@@ -128,10 +138,6 @@ struct ContentView: View {
                 // ------------------------------------------------
                 // Backend status
                 // ------------------------------------------------
-                //
-                // Orange = backend is starting / not ready yet
-                // Green  = backend responded successfully
-                //
 
                 HStack(spacing: 8) {
 
@@ -158,8 +164,6 @@ struct ContentView: View {
 
                 if !isSignedIn {
 
-                    // Google Sign-In button
-
                     GoogleSignInButton {
 
                         Task {
@@ -168,8 +172,6 @@ struct ContentView: View {
                     }
                     .frame(height: 50)
 
-
-                    // General status/error messages
 
                     Text(status)
                         .font(.caption)
@@ -191,8 +193,12 @@ struct ContentView: View {
                     // Selected vehicle image
                     // ------------------------------------------------
                     //
-                    // After taking/selecting a picture, display it
-                    // here before/after the AI analysis.
+                    // Before cropping:
+                    // selectedImage contains the original photograph.
+                    //
+                    // After "Analyze Selection":
+                    // selectedImage contains the actual cropped image
+                    // that was sent to Gemini.
                     //
 
                     if let image = selectedImage {
@@ -225,6 +231,7 @@ struct ContentView: View {
 
                             Text("Detected Assembly")
                                 .font(.caption)
+
 
                             // Convert:
                             //
@@ -426,6 +433,7 @@ struct ContentView: View {
 
                         parts = []
                         partsError = nil
+                        scanResult = nil
 
                         // Ask user whether they want camera
                         // or photo library.
@@ -494,6 +502,11 @@ struct ContentView: View {
         //
         // Opens the iPhone photo library.
         //
+        // IMPORTANT:
+        // We no longer call scan(image) here.
+        //
+        // The image is first sent to ImageCropView.
+        //
 
         .sheet(
             isPresented: $showPhotoPicker
@@ -503,9 +516,8 @@ struct ContentView: View {
 
                 prepareNewImage(image)
 
-                Task {
-                    await scan(image)
-                }
+                // Open crop/zoom screen.
+                showingImageCrop = true
             }
         }
 
@@ -516,9 +528,9 @@ struct ContentView: View {
         //
         // Opens the iPhone camera.
         //
-        // Remember:
-        //
         // NSCameraUsageDescription must exist in Info.plist.
+        //
+        // Again, we do not analyze immediately.
         //
 
         .sheet(
@@ -529,9 +541,63 @@ struct ContentView: View {
 
                 prepareNewImage(image)
 
-                Task {
-                    await scan(image)
-                }
+                // Open crop/zoom screen.
+                showingImageCrop = true
+            }
+        }
+
+
+        // ============================================================
+        // MARK: - Image Crop / Zoom Sheet
+        // ============================================================
+        //
+        // This is the new step in our workflow.
+        //
+        // Original photograph
+        //       ↓
+        // ImageCropView
+        //       ↓
+        // User zooms + drags
+        //       ↓
+        // User presses "Analyze Selection"
+        //       ↓
+        // Cropped UIImage
+        //       ↓
+        // scan()
+        //
+
+        .sheet(
+            isPresented: $showingImageCrop
+        ) {
+
+            if let image = selectedImage {
+
+                ImageCropView(
+                    image: image,
+
+                    onCrop: { croppedImage in
+
+                        // Close crop screen.
+                        showingImageCrop = false
+
+                        // Store the actual cropped image.
+                        //
+                        // This means the image displayed on the main
+                        // screen is exactly what we sent to Gemini.
+                        selectedImage = croppedImage
+
+                        // Analyze ONLY the selected crop.
+                        Task {
+                            await scan(croppedImage)
+                        }
+                    },
+
+                    onCancel: {
+
+                        // User decided not to analyze this image.
+                        showingImageCrop = false
+                    }
+                )
             }
         }
 
@@ -539,9 +605,6 @@ struct ContentView: View {
         // ============================================================
         // MARK: - Google Sign-In Callback
         // ============================================================
-        //
-        // Google redirects back to the app after authentication.
-        //
 
         .onOpenURL { url in
 
@@ -634,18 +697,23 @@ struct ContentView: View {
     // MARK: - Scan Image
     // ================================================================
     //
+    // IMPORTANT:
+    //
+    // The UIImage arriving here is now the CROPPED image produced
+    // by ImageCropView rather than the original whole-car image.
+    //
     // Flow:
     //
-    // UIImage
-    //    ↓
+    // Cropped UIImage
+    //       ↓
     // JPEG
-    //    ↓
+    //       ↓
     // POST /scan
-    //    ↓
+    //       ↓
     // Spring Boot
-    //    ↓
+    //       ↓
     // Gemini
-    //    ↓
+    //       ↓
     // ScanResult
     //
 
