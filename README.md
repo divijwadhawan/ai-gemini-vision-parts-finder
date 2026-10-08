@@ -1,4 +1,4 @@
-# JavaLearning – GolfParts
+# Gemini Vision Parts Finder
 
 A full-stack learning project built to understand modern Java/Spring Boot backend development and how a native iOS frontend consumes a secured REST API.
 
